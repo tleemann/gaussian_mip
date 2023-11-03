@@ -1,4 +1,4 @@
-data_folder=/ssd/tobias/datasets
+data_folder=/datasets
 mkdir ${data_folder}/purchase
 wget -O ${data_folder}/purchase/purchase.tgz https://www.comp.nus.edu.sg/~reza/files/dataset_purchase.tgz 
 tar zxvf ${data_folder}/purchase/purchase.tgz -C ${data_folder}/purchase
