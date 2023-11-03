@@ -8,7 +8,7 @@ The adult dataset is included in this repository and CIFAR-10 is available via p
 ./tabular/download_datasets.sh
 ```
 
-## Gradient Log Likelihood attack
+## Gradient Likelihood Ratio (GLiR) attack
 
 In our work, we present a novel membership inference attack. We run this attack on models that were trained with the train scripts ```gmip/train_cifar.py``` and ```gmip/train_tabular.py````. An example is in the Notebook ``notebooks/GLiRAttack.ipynb``.
 
