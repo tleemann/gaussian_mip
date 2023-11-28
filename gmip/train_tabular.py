@@ -7,14 +7,38 @@ import torch.nn as nn
 import sys
 import torch.utils.data as data
 from gmip.dp_sgd import RandomSubsetDataset, noisy_train, eval_model, PrivateOptimizer
+from gmip.utils import compute_tau
 from torch.optim import Adam
 from opacus.grad_sample import GradSampleModule
 import math
 import numpy as np
 from gmip.utils import get_fn, calc_privacy_lvl
 from scipy.optimize import fsolve
+import argparse
 
 shallow_flag = False
+
+def arg_parse():
+    # add arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('dataset', type=str, help='dataset to use. supports "purchase" and "adult" currently', default="purchase")
+    parser.add_argument('C', type=float, help='cropping threshold', default=100.0)
+    parser.add_argument('tau', type=str, help='noise level tau (number) or DP<idx> or MIP<idx> for utility experiment', default="1.0")
+    parser.add_argument('runid', type=int, help='number of the run', default=0)
+    parser.add_argument("savepath", type=str, help='the path where to save the trained models', default='models')
+    parser.add_argument('batch_size', type=int, help='batchsize to use', default=125)
+    parser.add_argument('epochs', type=int, help='number of epochs to train', default=0)
+    parser.add_argument('--device', type=str, help='device to use for training', default="cuda:0")
+    parser.add_argument('--finetune', type=bool, help='fintune a pretrained model, or pretrain a model', default=True)
+    parser.add_argument('--shallow', type=bool, help='use this mode to train shallow models for the attack experiment', default=False)
+    parser.add_argument('--trace_grads', type=bool, help='trace and store accumulated gradients for performing attacs', default=False)
+    parser.add_argument('--kval', type=int, help='value of K to use for automatic privacy computation', default=650)
+    parser.add_argument('--model_dims', type=int, help='number of trainable parameters. pass correct value if arch is not resnet56', default=650)
+    parser.add_argument('--num_train', type=int, help='reduce the number of training points to use to this number', default=-1)
+    parser.add_argument('--dataset_path', type=str, help='the path where the dataset csv files are stored', default='datasets')
+    args = parser.parse_args()
+    return args
+
 def create_purchase_base():
     net = nn.Sequential(
         nn.Linear(600, 1024),
@@ -37,49 +61,25 @@ def create_adult_base():
     return net, (lambda modelp: modelp._modules["_module"].state_dict())
 
 if __name__ == "__main__":
-    dataset_path = "/ssd/tobias/datasets/"
+   
+    config = arg_parse()
 
-    dataset = "purchase"
-    if len(sys.argv) > 1:
-        dataset = sys.argv[1]
+    dataset = config.dataset
+    C = config.C
+    tau = config.tau
+    runid = config.runid
+    savepath = config.savepath
+    batch_size = config.batch_size
+    epochs = config.epochs
+    trace_grads = config.trace_grads
+    dataset_path = config.dataset_path
 
-    C = 100
-    if len(sys.argv) > 2:
-        C = float(sys.argv[2])
-
-    tau = 1e-2
-    if len(sys.argv) > 3:
-        tau = sys.argv[3]
-
-    runid = 0
-    if len(sys.argv) > 4:
-        runid = int(sys.argv[4])
-
-    savepath="models"
-    if len(sys.argv) > 5:
-        savepath = sys.argv[5] 
-
-    batch_size = 128
-    if len(sys.argv) > 6:
-        batch_size = int(sys.argv[6])
-
-    epochs = 30
-    if len(sys.argv) > 7:
-        epochs = int(sys.argv[7])
-
-    #dataset_path = 30
-    trace_grads = False
     replacement = True
     subsample_ratio = 0.5
-    if len(sys.argv) > 8:
-        if sys.argv[8] == "True" or sys.argv[8] == "true":
-            print("Tracing gradients.")
-            trace_grads = True
-            subsample_ratio = batch_size/(55494.0 if dataset=="purchase" else 43842.0)
-            replacement = False
-    
-    if len(sys.argv) > 9:
-        dataset_path = sys.argv[9]
+    if trace_grads:
+        print("Tracing gradients.")
+        subsample_ratio = batch_size/(55494.0 if dataset=="purchase" else 43842.0)
+        replacement = False
 
     torch.manual_seed(49*runid)
     n_total = None
@@ -91,29 +91,19 @@ if __name__ == "__main__":
         mus = np.exp(np.linspace(np.log(0.4), np.log(50), 20))
         mu_use = mus[index]
         print("Target mu:", mu_use)
+        K=config.kval
+        d=config.model_dims
+        N=config.num_train
         if dataset == "purchase":
-            K=2560
-            d=2560
-            N=54855
             subsample_ratio = N/55494.0
         elif dataset == "adult":
-            K=1026
-            d=1026
-            N=43000
             subsample_ratio = N/43842.0
         T=(N/batch_size)*epochs
         torch.manual_seed(53*((runid)*20+index))
         if mu_use > calc_privacy_lvl(C, 0.0, T, batch_size, N, d, K) and ("MIP" in tau):
             tau_eff = 0.0
         else:
-            func_mip = get_fn(mu_use, dp=("DP" in tau), C=C, K=K, d=d, N=N, T=T, batch_size=batch_size)
-            tau_0 = np.array([1.0])
-            tau_eff = fsolve(func_mip, tau_0.copy(), factor=0.1)[0]
-            if ("MIP" in tau):
-                func_dp = get_fn(mu_use, dp=True, C=C, K=K, d=d, N=N, T=T, batch_size=batch_size)
-                tau_0 = np.array([1.0])
-                tau_eff_dp = fsolve(func_dp, tau_0.copy(), factor=0.1)[0]
-                tau_eff = min(tau_eff, tau_eff_dp)
+            tau_eff = compute_tau(mu_use, C, K, d, N, T, batch_size)
 
         if shallow_flag:
             subsample_ratio = 0.5
@@ -129,7 +119,7 @@ if __name__ == "__main__":
 
     try:
         import pandas as pd
-        df = pd.read_csv(f"{dataset_path}{dataset}/{dataset}.csv", header=None)
+        df = pd.read_csv(f"{dataset_path}/{dataset}/{dataset}.csv", header=None)
         dataset_tensor = torch.tensor(df.values)
     except:
         # Dont want to install pandas

@@ -12,7 +12,7 @@ from torch.optim import Adam, RMSprop, SGD
 from gmip.dp_sgd import PrivateOptimizer, noisy_train, eval_model, recursive_fix, RandomSubsetDataset
 import torch.utils.data as data
 import numpy as np
-from gimp.utils import get_fn, calc_privacy_lvl, compute_tau
+from gmip.utils import compute_tau
 
 """ Args: train_cifar.py C tau runid savepath batch_size epochs model_arch device
     tau can either be a numerical value or MIP<step> / DP<step>, e.g. MIP10 to train a model for the 10th step of the utility experiment. tau is computed automatically in this case.

@@ -9,7 +9,7 @@ def fn_dong(mus):
     return math.sqrt(2)*math.sqrt(math.exp(mus*mus)*norm.cdf(1.5*mus)+3*norm.cdf(-0.5*mus)-2)
     
 def calc_privacy_lvl(C, tau, T, n, N, d, K):
-    print(C, tau, T, n, N, d, K)
+    #print(C, tau, T, n, N, d, K)
     n_eff = n + (n*n*tau*tau)/(C*C)
     #print("neff=", n_eff)
     #mu_step = (d+(2*n_eff-1)*K)/(n_eff*math.sqrt(2*d + 4*n_eff*K))
