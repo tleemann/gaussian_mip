@@ -35,6 +35,9 @@ In our work, we present a novel membership inference attack. We run this attack 
 
 **Preliminary code version. More documentation and code to be added soon.**
 
+## Utility Considerations
+
+To reproduce our experiment on the utility of Membership Inference Private models vs. Differentially Private models, please consider the notebook ``notebooks/UtilityConsiderations.ipynb``. To create the utility plot, it is first required to train corresponding models using the script ``train_scripts/train_models_util.sh <dataset>``, which takes a single argument that defines the dataset (currently supported are "adult", "purchase", "cifar10"). Run the script for all three datasets to recreate the plots. Further instructions can be found in the notebook.
 
 ## Reference
 If you find our work or the ressources provided here useful, please consider citing our work, for instance using the following BibTex entry:
