@@ -1,6 +1,6 @@
 # Gaussian Membership Inference Privacy
 
-This repository contains accompanying code for the paper [Gaussian Membership Inference Privacy](https://openreview.net/forum?id=2NUFe4TZMS) by Tobias Leemann*, Martin Pawelczyk*, and Gjergji Kasneci.
+This repository contains accompanying code for the paper [Gaussian Membership Inference Privacy](https://arxiv.org/abs/2306.07273) by Tobias Leemann*, Martin Pawelczyk*, and Gjergji Kasneci.
 
 ## Setup
 The following steps are required to run the code in this repository using a dedicated anaconda environment.
