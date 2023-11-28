@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from opacus.grad_sample import GradSampleModule
 from torch.utils.data import DataLoader, Dataset, TensorDataset
+import typing as tp
 import torch
 from scipy.stats import ncx2, norm
 import gmip
@@ -197,9 +198,13 @@ class GLiRAttack():
         self.n = training_batch_size
         self.n_background_samples = n_background_samples
 
-    def compute_glir_attack_scores_w_loader(self, dataset_loader, n_load, n_steps=1):
+    def compute_glir_attack_scores_w_loader(self, dataset_loader: DataLoader, n_load: int, n_steps=1):
         """ 
             Run the GLiR attack on a number of points and compute scores.
+            dataset_loader: DataLoader with points for which the GLiR attack scores should be computed
+            n_load: Number of points to be taken from dataset_loader
+            n_steps: Number of SGD steps to consider for the attack (these will be played back using the model tracer.)
+            Return: Summed GLiR scores over the training steps. Shape (n_load).
         """
         tot_scores_mat = []
         for step in range(n_steps):

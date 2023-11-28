@@ -81,9 +81,8 @@ class ListDataLoader(DataLoader):
                     if self.curr_idx < len(self.parent.my_dllist) - 1:
                         self.curr_idx +=1
                         self.curr_iter = iter(self.parent.my_dllist[self.curr_idx])
-                        print("switch to idx", self.curr_idx)
                     else:
-                        print("exhausted")
+                        print("ListDataLoader exhausted")
                         break
             if mybatch is not None:
                 return mybatch
