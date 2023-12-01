@@ -22,7 +22,7 @@ dset_cache = "."
 def arg_parse():
     # add arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('C', type=int, help='cropping threshold', default=100)
+    parser.add_argument('C', type=float, help='cropping threshold', default=100)
     parser.add_argument('tau', type=str, help='noise level tau (number) or DP<idx> or MIP<idx> for utility experiment', default="1.0")
     parser.add_argument('runid', type=int, help='number of the run', default=0)
     parser.add_argument("savepath", type=str, help='the path where to save the trained models', default='models')
@@ -74,7 +74,7 @@ if __name__ == "__main__":
         N = config.num_train if config.num_train > 0 else len(cifar_train)
         share_trainset_use = N
         T=(N/config.batch_size)*config.epochs
-        tau_eff = compute_tau(mu_use, config.C, K, d, N, T, config.batch_size)
+        tau_eff = compute_tau(mu_use, config.C, K, d, N, T, config.batch_size, dp=("DP" in config.tau))
     else:
         tau = float(config.tau)
         if tau != 0.0:
