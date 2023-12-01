@@ -31,9 +31,7 @@ The adult dataset is included in this repository and CIFAR-10 is available via p
 
 ## Gradient Likelihood Ratio (GLiR) attack
 
-In our work, we present a novel membership inference attack. We run this attack on models that were trained with the train scripts ```gmip/train_cifar.py``` and ```gmip/train_tabular.py```. An example is in the Notebook ``notebooks/GLiRAttack.ipynb``.
-
-**Preliminary code version. More documentation and code to be added soon.**
+In our work, we present a novel membership inference attack. In Figure 2 of our paper, we run this attack on models that were trained with the train script ```train_scripts/train_models_audit.py <dataset>```. See the notebook ```notebooks/GLiRAttack.ipynb``` for the full code of the attack and more details on how to run it on the trained models.
 
 ## Utility Considerations
 
