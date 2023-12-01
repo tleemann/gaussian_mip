@@ -16,8 +16,6 @@ from gmip.utils import get_fn, calc_privacy_lvl
 from scipy.optimize import fsolve
 import argparse
 
-shallow_flag = False
-
 def arg_parse():
     # add arguments
     parser = argparse.ArgumentParser()
@@ -73,16 +71,15 @@ if __name__ == "__main__":
     epochs = config.epochs
     trace_grads = config.trace_grads
     dataset_path = config.dataset_path
+    shallow_flag = config.shallow
 
+    n_total = None
+    subsample_ratio = 1.0
     replacement = True
-    subsample_ratio = 0.5
     if trace_grads:
         print("Tracing gradients.")
-        subsample_ratio = batch_size/(55494.0 if dataset=="purchase" else 43842.0)
-        replacement = False
 
     torch.manual_seed(49*runid)
-    n_total = None
     if "DP" in tau or "MIP" in tau: # Ulitiy experiment setup
         if "DP" in tau:
             index = int(tau[2:])
@@ -94,28 +91,22 @@ if __name__ == "__main__":
         K=config.kval
         d=config.model_dims
         N=config.num_train
-        if dataset == "purchase":
-            subsample_ratio = N/55494.0
-        elif dataset == "adult":
-            subsample_ratio = N/43842.0
+        n_total = N
+
         T=(N/batch_size)*epochs
         torch.manual_seed(53*((runid)*20+index))
-        if mu_use > calc_privacy_lvl(C, 0.0, T, batch_size, N, d, K) and ("MIP" in tau):
-            tau_eff = 0.0
-        else:
-            tau_eff = compute_tau(mu_use, C, K, d, N, T, batch_size)
+        tau_eff = compute_tau(mu_use, C, K, d, N, T, batch_size, dp=("DP in tau"))
 
-        if shallow_flag:
-            subsample_ratio = 0.5
-            n_total = 2*batch_size
-            replacement = False
     else:
         tau = float(tau)
-        if tau != 0.0:
-            tau_eff = (tau*C)/math.sqrt(batch_size)
-        else:
-            tau_eff = 0.0
+        tau_eff = tau
     print(f"Using C={C}, tau={tau_eff}, batch_size={batch_size}, epochs={epochs} as privacy parameters.")
+    
+    if shallow_flag:
+        subsample_ratio = 0.5
+        n_total = 2*config.batch_size
+        replacement = False
+        print("shallow")
 
     try:
         import pandas as pd
@@ -225,4 +216,4 @@ if __name__ == "__main__":
         res_dict["stepwise_params"] = tot_params_list
         res_dict["stepwise_grads"] = tot_grad_list
     ## Legacy naming convention
-    torch.save(res_dict, f"{savepath}/{dataset}_C{C}_tau{tau}_batch{batch_size}_ep{ep_trained}_{runid}{'' if not trace_grads else '_stepwise'}.pt")
+    torch.save(res_dict, f"{savepath}/{dataset}_C{C}_tau{tau}_batch{batch_size}_ep{ep_trained}_{runid}.pt")

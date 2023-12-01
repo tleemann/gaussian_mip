@@ -32,7 +32,7 @@ def arg_parse():
     parser.add_argument('--device', type=str, help='device to use for training', default="cuda:0")
     parser.add_argument('--finetune', type=bool, help='fintune a pretrained model, or pretrain a model', default=True)
     parser.add_argument('--shallow', type=bool, help='use this mode to train shallow models for the attack experiment', default=False)
-    parser.add_argument('--trace_grads', type=bool, help='trace and store accumulated gradients for performing attacs', default=False)
+    parser.add_argument('--trace_grads', type=bool, help='trace and store accumulated gradients for performing attacks', default=False)
     parser.add_argument('--kval', type=int, help='value of K to use for automatic privacy computation', default=650)
     parser.add_argument('--model_dims', type=int, help='number of trainable parameters. pass correct value if arch is not resnet56', default=650)
     parser.add_argument('--num_train', type=int, help='reduce the number of training points to use to this number', default=-1)
@@ -61,6 +61,7 @@ if __name__ == "__main__":
 
     share_trainset_use = None
     ratio_train = 1.0
+    replacement = True
     if "DP" in config.tau or "MIP" in config.tau: # Perf setup
         if "DP" in config.tau:
             index = int(config.tau[2:])
@@ -77,14 +78,13 @@ if __name__ == "__main__":
         tau_eff = compute_tau(mu_use, config.C, K, d, N, T, config.batch_size, dp=("DP" in config.tau))
     else:
         tau = float(config.tau)
-        if tau != 0.0:
-            tau_eff = (tau*C)/math.sqrt(config.batch_size)
-        else:
-            tau_eff = 0.0
+        tau_eff = tau
 
     if shallow_flag:
-        share_trainset_use = batch_size*2
+        share_trainset_use = config.batch_size*2
         ratio_train = 0.5
+        replacement = False
+        
     ###
     print(f"Using C={config.C}, tau={tau_eff}, batch_size={config.batch_size}, epochs={config.epochs} as privacy parameters.")
     
@@ -94,7 +94,7 @@ if __name__ == "__main__":
         base_trainloader = torch.utils.data.DataLoader(cifar_train_split, batch_size=config.batch_size, shuffle=True, num_workers=4)
         base_testloader = torch.utils.data.DataLoader(cifar_test, batch_size=config.batch_size, shuffle=False, num_workers=4)
     else:
-        base_trainloader = data.DataLoader(cifar_train_split, batch_size=config.batch_size, num_workers=4, sampler = data.RandomSampler(torch.arange(len(cifar_train_split)), replacement=True if share_train==None else False))
+        base_trainloader = data.DataLoader(cifar_train_split, batch_size=config.batch_size, num_workers=4, sampler = data.RandomSampler(torch.arange(len(cifar_train_split)), replacement=replacement))
         base_testloader = data.DataLoader(cifar_test, batch_size=config.batch_size, shuffle=False, num_workers=4)
     print(len(cifar_train_split), len(cifar_test), cifar_train_split.get_samples_used().tolist()[:10])
 
@@ -142,14 +142,20 @@ if __name__ == "__main__":
 
     # Private Optimizer
 
-
     myoptim_adam = PrivateOptimizer(Adam(model_opacus.parameters(), lr=1e-3), model_opacus, C=config.C, tau=tau_eff)
     acc= 0.0
     ep_trained = 0
     max_acc = 0.
     best_epoch = 0
+    tot_grad_list = []
+    tot_params_list = []
     while ep_trained < config.epochs:
-        model_opacus = noisy_train(model_opacus, base_trainloader, criterion, myoptim_adam, 1, ep_trained, use_device=config.device)
+        if config.trace_grads:
+            model_opacus, ep_grad, ep_params = noisy_train(model_opacus, base_trainloader, criterion, myoptim_adam, 1, ep_trained, use_device=config.device, collect_stepwise=True)
+            tot_grad_list = tot_grad_list + ep_grad
+            tot_params_list = tot_params_list + ep_params
+        else:
+            model_opacus = noisy_train(model_opacus, base_trainloader, criterion, myoptim_adam, 1, ep_trained, use_device=config.device)
         ep_trained += 1
 
         acc = eval_model(model, base_testloader, use_device=config.device)
@@ -165,6 +171,8 @@ if __name__ == "__main__":
         res_dict["samples_used"] = cifar_train_split.get_samples_used().tolist()
     #res_dict["model_opacus"] = model_opacus.cpu().state_dict()
     model = model.cpu()
+    res_dict["stepwise_params"] = tot_params_list
+    res_dict["stepwise_grads"] = tot_grad_list
     #res_dict["model_plain"] = model.state_dict() 
     res_dict["model_plain_fc_layer"] = model.fc.state_dict() #model.cpu().state_dict()
 
