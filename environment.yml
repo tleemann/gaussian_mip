@@ -16,6 +16,7 @@ dependencies:
   - yaml=0.2.5
   - zlib=1.2.13
   - pip:
+      - ipywidgets==8.1.2
       - huggingface-hub==0.14.1
       - ipykernel==6.22.0
       - ipython==8.12.0

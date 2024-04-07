@@ -5,7 +5,10 @@ from datetime import datetime
 import torch.nn as nn
 import copy
 MAX_PHYSICAL_BATCH = 256 # Maximum batch size on GPU.
-
+if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+    use_device = torch.device('cuda:0')
+else:
+    use_device = torch.device('cpu')
 class RandomSubsetDataset():
     def __init__(self, base_dataset, subsample_ratio: float = 0.5, n_use_total=None):
         self.base_dataset = base_dataset
@@ -49,7 +52,7 @@ def recursive_fix(module):
             recursive_fix(sub)
 
 def noisy_train(model_priv, trainloader, criterion, optimizer_priv, epoch, start_epoch, 
-                scheduler=None, use_device="cuda:0", collect_stepwise=False, state_dict_fn=None):
+                scheduler=None, use_device=use_device, collect_stepwise=False, state_dict_fn=None):
     """
         Our implementation of the Noisy Private Training (Algorithm 1).
         model: model that should be trained
@@ -212,7 +215,7 @@ class PrivateOptimizer():
         self.grad_sum = 0.0
 
 
-def eval_model(model, testloader, use_device="cuda:0"):
+def eval_model(model, testloader, use_device=use_device):
     """ Eval accuracy of model. """
     correct = 0
     prob = 0.0
