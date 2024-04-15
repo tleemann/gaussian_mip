@@ -2,7 +2,15 @@
 
 This repository contains accompanying code for the paper [Gaussian Membership Inference Privacy](https://arxiv.org/abs/2306.07273) by Tobias Leemann*, Martin Pawelczyk*, and Gjergji Kasneci.
 
-## Setup
+## Membership Inference Privacy Calculator: How Private is Your Model? 
+
+<img align="right" width="378" height="778" src="https://raw.githubusercontent.com/tleemann/gaussian_mip/cpu-option/PrivacyCalculator.JPG">
+
+**Find out how private your model is!** Enter your models's parameter in our interactive calculator to valuate the maximal vulnerability of your model to membership inference attacks, and visualize the results using AU-ROC curve.
+
+https://colab.research.google.com/drive/1M5gvbB29Wn3k6pxkmcMJCDVbBh7kLkiO?usp=sharing
+
+### Setup
 The following steps are required to run the code in this repository using a dedicated anaconda environment.
 
 ### Creating an Anaconda Environment
