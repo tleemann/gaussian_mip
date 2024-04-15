@@ -15,7 +15,10 @@ import numpy as np
 from gmip.utils import get_fn, calc_privacy_lvl
 from scipy.optimize import fsolve
 import argparse
-
+if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+    use_device = torch.device('cuda:0')
+else:
+    use_device = torch.device('cpu')
 def arg_parse():
     # add arguments
     parser = argparse.ArgumentParser()
@@ -26,7 +29,7 @@ def arg_parse():
     parser.add_argument("savepath", type=str, help='the path where to save the trained models', default='models')
     parser.add_argument('batch_size', type=int, help='batchsize to use', default=125)
     parser.add_argument('epochs', type=int, help='number of epochs to train', default=0)
-    parser.add_argument('--device', type=str, help='device to use for training', default="cuda:0")
+    parser.add_argument('--device', type=str, help='device to use for training', default=use_device)
     parser.add_argument('--finetune', type=bool, help='fintune a pretrained model, or pretrain a model', default=True)
     parser.add_argument('--shallow', type=bool, help='use this mode to train shallow models for the attack experiment', default=False)
     parser.add_argument('--trace_grads', type=bool, help='trace and store accumulated gradients for performing attacs', default=False)
@@ -161,11 +164,11 @@ if __name__ == "__main__":
     base_testloader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=4)
 
     ## Setup model and optimizer
-    use_device = "cuda:0"
     if dataset == "purchase":
         model_finetune, state_fn = create_purchase_base()
         model_finetune = model_finetune.to(use_device)
-        model_finetune.load_state_dict(torch.load("tabular/tabular_base998.pt"))
+        model_finetune.load_state_dict(torch.load("tabular/tabular_base998.pt", map_location=torch.device(use_device)))
+
         ## Shut off dropout and change last layer.
         for p in model_finetune.parameters():
             p.requires_grad_(False)

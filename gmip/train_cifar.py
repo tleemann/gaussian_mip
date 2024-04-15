@@ -17,6 +17,10 @@ from gmip.utils import compute_tau
 """ Args: train_cifar.py C tau runid savepath batch_size epochs model_arch device
     tau can either be a numerical value or MIP<step> / DP<step>, e.g. MIP10 to train a model for the 10th step of the utility experiment. tau is computed automatically in this case.
 """
+if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+    use_device = torch.device('cuda:0')
+else:
+    use_device = torch.device('cpu')
 
 dset_cache = "."
 def arg_parse():
@@ -29,7 +33,7 @@ def arg_parse():
     parser.add_argument('batch_size', type=int, help='batchsize to use', default=125)
     parser.add_argument('epochs', type=int, help='number of epochs to train', default=0)
     parser.add_argument('model_arch', type=str, help='architecture to use', default="resnet56")
-    parser.add_argument('--device', type=str, help='device to use for training', default="cuda:0")
+    parser.add_argument('--device', type=str, help='device to use for training', default=use_device)
     parser.add_argument('--finetune', type=bool, help='fintune a pretrained model, or pretrain a model', default=True)
     parser.add_argument('--shallow', type=bool, help='use this mode to train shallow models for the attack experiment', default=False)
     parser.add_argument('--trace_grads', type=bool, help='trace and store accumulated gradients for performing attacks', default=False)
