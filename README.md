@@ -4,7 +4,7 @@ This repository contains accompanying code for the paper [Gaussian Membership In
 
 ## Membership Inference Privacy Calculator: How Private is Your Model? 
 
-<a href="https://colab.research.google.com/drive/1R3yqS8k9bOhxp3WPmOmBKUvrKPTGKLjs?usp=sharing"><img align="right" width="378" height="778" src="https://raw.githubusercontent.com/tleemann/gaussian_mip/cpu-option/images/PrivacyCalculator.JPG"></a>
+<a href="https://colab.research.google.com/drive/1R3yqS8k9bOhxp3WPmOmBKUvrKPTGKLjs?usp=sharing"><img align="right" width="378" height="778" src="https://raw.githubusercontent.com/tleemann/gaussian_mip/cpu-option/images/PrivacyCalculator.PNG"></a>
 
 **Find out how private your model is!** Enter your models's parameters in our interactive calculator to valuate the maximal vulnerability of your model to membership inference attacks, and visualize the results using AU-ROC curve. No installation is required.
 
