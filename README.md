@@ -1,10 +1,10 @@
 # Gaussian Membership Inference Privacy
 
-This repository contains accompanying code for the paper [Gaussian Membership Inference Privacy](https://arxiv.org/abs/2306.07273) by Tobias Leemann*, Martin Pawelczyk*, and Gjergji Kasneci.
+This repository contains accompanying code for the paper [Gaussian Membership Inference Privacy](https://arxiv.org/abs/2306.07273) by Tobias Leemann*, Martin Pawelczyk*, and Gjergji Kasneci (appeared at NeurIPS 2023).
 
 ## Membership Inference Privacy Calculator: How Private is Your Model? 
 
-<a href="https://colab.research.google.com/drive/1R3yqS8k9bOhxp3WPmOmBKUvrKPTGKLjs?usp=sharing"><img align="right" width="378" height="778" src="https://raw.githubusercontent.com/tleemann/gaussian_mip/cpu-option/images/PrivacyCalculator.JPG"></a>
+<a href="https://colab.research.google.com/drive/1R3yqS8k9bOhxp3WPmOmBKUvrKPTGKLjs?usp=sharing"><img align="right" width="378" height="778" src="https://raw.githubusercontent.com/tleemann/gaussian_mip/main/images/PrivacyCalculator.PNG"></a>
 
 **Find out how private your model is!** Enter your models's parameters in our interactive calculator to valuate the maximal vulnerability of your model to membership inference attacks, and visualize the results using AU-ROC curve. No installation is required.
 
@@ -44,28 +44,6 @@ In our work, we present a novel membership inference attack. In Figure 2 of our 
 ## Utility Considerations
 
 To reproduce our experiment on the utility of Membership Inference Private models vs. Differentially Private models, please consider the notebook ``notebooks/UtilityConsiderations.ipynb``. To create the utility plot, it is first required to train corresponding models using the script ``train_scripts/train_models_util.sh <dataset>``, which takes a single argument that defines the dataset (currently supported are "adult", "purchase", "cifar10"). Run the script for all three datasets to recreate the plots. Further instructions can be found in the notebook.
-
-## Computations Notebook
-This notebook is designed for readers interested in assessing their privacy levels within data-driven systems. Through practical Python implementations, you'll be able to calculate statistical metrics, evaluate your vulnerability to membership inference attacks, and visualize the results using AU-ROC curve.
-
-https://colab.research.google.com/drive/1M5gvbB29Wn3k6pxkmcMJCDVbBh7kLkiO?usp=sharing
-
-<table>
-  <tr>
-    <!-- Image Cell 1 -->
-    <td style="vertical-align: top;">
-      <img src="./images/graph.png" alt="Privacy Level AU-ROC Curve" width="300"/>
-    </td>
-    <!-- Image Cell 2 -->
-    <td style="vertical-align: top;">
-      <img src="./images/output.png" alt="Additional Context Image 1" width="500"/>
-    </td>
-    <!-- Image Cell 3 -->
-    <td style="vertical-align: top;">
-      <img src="./images/private.png" alt="Additional Context Image 2" width="400"/>
-    </td>
-  </tr>
-</table>
 
 
 ## Reference
