@@ -69,7 +69,7 @@ https://colab.research.google.com/drive/1M5gvbB29Wn3k6pxkmcMJCDVbBh7kLkiO?usp=sh
 
 
 ## Reference
-If you find our work or the ressources provided here useful, please consider citing our work, for instance using the following BibTex entry:
+If you find our work or the ressources provided here useful, please consider citing our work, for instance using the following BibTeX entry:
 
 ```
 @InProceedings{leemann2023gaussian,
@@ -79,3 +79,19 @@ If you find our work or the ressources provided here useful, please consider cit
   year      = {2023}
 }
 ```
+
+# Is My Data Safe? Predicting Instance-Level Membership Inference Success for White-box and Black-box Attacks
+The repository additionally contains code for extenting the attack to more realistic datasets and models such as BERT and a skin cancer prediction dataset as presented in the ICML workshop paper.
+
+Please refer to the workshop paper for more details and use the following BibTeX key to cite it:
+
+```
+@InProceedings{leemann2024data,
+  title     = {Is My Data Safe? Predicting Instance-Level Membership Inference Success for White-box and Black-box Attacks},
+  author    = {Leemann, Tobias and Prenkaj, Bardh and Kasneci, Gjergji},
+  booktitle = {ICML 2024 Workshop on the Next Generation of AI Safety},
+  year      = {2024}
+}
+```
+
+
