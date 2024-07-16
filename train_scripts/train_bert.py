@@ -9,14 +9,13 @@ import sys
 import torch.nn as nn
 import math
 from torch.optim import Adam, RMSprop, SGD
-from dp_sgd import PrivateOptimizer, noisy_train, eval_model, recursive_fix, RandomSubsetDataset
 import torch.utils.data as data
 import numpy as np
 from transformers import BertForSequenceClassification, BertConfig, DistilBertForSequenceClassification
 from opacus.validators import ModuleValidator
 from transformers import AutoTokenizer
 from datasets import load_dataset
-
+from gmip.dp_sgd import PrivateOptimizer, noisy_train, eval_model, recursive_fix, RandomSubsetDataset
 """ Args: train_cifar.py C tau runid savepath batch_size epochs model_arch device
     tau can either be a numerical value or MIP<step> / DP<step>, e.g. MIP10 to train a model for the 10th step of the utility experiment. tau is computed automatically in this case.
 """

@@ -22,7 +22,7 @@ fi
 
 if [ $1 == "cifar10" ]
 then
-export PYTHONPATH="."; python3 train_scripts/train_cifar.py inf 0.0 $runid $SAVEPATH 32 30 resnet --device $2 --num_train 2000 --trace_grads true --record_steps 50
+export PYTHONPATH="."; python3 train_scripts/train_cifar_risk.py inf 0.0 $runid $SAVEPATH 32 30 resnet --device $2 --num_train 2000 --trace_grads true --record_steps 50
 fi
 
 done

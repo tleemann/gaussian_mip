@@ -11,12 +11,11 @@ import torch.nn as nn
 from torch.optim import Adam
 from tqdm import tqdm
 from ext_datasets.skin_cancer import SkinCancerDataset
-from dp_sgd import PrivateOptimizer, noisy_train, eval_model, recursive_fix, RandomSubsetDataset
 import torch.utils.data as data
 import numpy as np
+from models.resnets import CustomBasicBlock, CustomResNet
+from gmip.dp_sgd import PrivateOptimizer, noisy_train, eval_model, recursive_fix, RandomSubsetDataset
 from ext_datasets.skin_cancer import preprocess
-from resnets import CustomBasicBlock, CustomResNet
-
 """ Args: train_cifar.py C tau runid savepath batch_size epochs model_arch device
     tau can either be a numerical testue or MIP<step> / DP<step>, e.g. MIP10 to train a model for the 10th step of the utility experiment. tau is computed automatically in this case.
 """

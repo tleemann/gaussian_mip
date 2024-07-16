@@ -3,17 +3,19 @@ from opacus.grad_sample import GradSampleModule
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 import typing as tp
 import torch
-from scipy.stats import ncx2, norm
+from tqdm import tqdm
 import gmip
+from scipy.stats import ncx2, norm
 import math
 ## Implementation of the Gradient Likelihood Ratio Attack (GLiR)
 
 class GradientInterface(ABC):
 
     @abstractmethod
-    def compute_gradients(self, *input_tensors):
-        """ Compute the gradients for a batch of input tensors. Usually these are expected
+    def compute_gradients(self, input_tensors):
+        """ Compute the gradients for a batch of input tensors. Usually these tensors are expected
             to have the same length (e.g., input data at index 0, labels as index 1).
+            The function also supports dicts for huggingface models (keys: input_ids, attention_mask, label)
         """
         pass
 
@@ -50,27 +52,32 @@ class ClassificationModelGradients(GradientInterface):
     """ 
         An implementation of the Gradient Interface.
     """
-    def __init__(self, model: GradSampleModule, criterion, cutoff_threshold=float("inf"), device="cuda"):
+    def __init__(self, model: GradSampleModule, criterion, cutoff_threshold=float("inf"), device="cuda", onlyuse_layers=None):
+        """ onlyuse_layers: only use the gradients of the layers indexed in this array. Should be a to index a torch tensor. None to use all."""
         self.model = model
         self.criterion = criterion
         self.device = device
         self.cutoff = cutoff_threshold
+        self.onlyuse_layers = onlyuse_layers
+        print(self.onlyuse_layers)
 
-    def compute_gradients(self, *input_tensors):
+    def compute_gradients(self, input_tensors):
         """ Compute model gradients for the model """
         self.__zero_grad()
-        inputs, labels = input_tensors[0].to(self.device), input_tensors[1].to(self.device)
-        #print(type(self.model), self.model.fc.weight.requires_grad)
-        outputs_batch = self.model(inputs)
-        #print(outputs_batch.shape)
+        #print(input_tensors)
+        if not isinstance(input_tensors, dict):
+            inputs, labels = input_tensors[0].to(self.device), input_tensors[1].to(self.device)
+            outputs_batch = self.model(inputs)
+        else:
+            labels = input_tensors["label"].to(self.device)
+            outputs_batch = self.model(input_tensors["input_ids"].to(self.device), input_tensors["attention_mask"].to(self.device))["logits"]
         loss_batch = self.criterion(outputs_batch, labels) # Note that loss should return one element per batch item.
         loss_batch.backward()
         grads = self.__aggregate_grads()
-        #print(grads.shape)
         grad_norms = grads.norm(dim=1)
         #print(grad_norms, cutoff)
         grads[grad_norms>self.cutoff] = grads[grad_norms>self.cutoff]/grad_norms[grad_norms>self.cutoff].reshape(-1,1)
-        #self.model.remove_hooks()
+        #print(grads.shape)
         return grads
 
     def __zero_grad(self):
@@ -87,7 +94,10 @@ class ClassificationModelGradients(GradientInterface):
             #print(type(t.grad_sample), type(t))
             if t.grad_sample is not None:
                 param_grad_list.append(t.grad_sample.reshape(len(t.grad_sample), -1).clone().cpu())
-        return torch.cat(param_grad_list, axis=1)
+        if self.onlyuse_layers is None:
+            return torch.cat(param_grad_list, axis=1)
+        else:
+            return torch.cat([param_grad_list[k] for k in self.onlyuse_layers], axis=1)
 
     def get_model(self):
         return self.model
@@ -109,11 +119,12 @@ class DirectGradients(GradientInterface):
         """
         return None
 
+
 class CheckpointListTracer(ModelTracingInterface):
     """ 
         Trace the model using logfiles created by the training scripts in this project.
     """
-    def __init__(self, path_to_trace_file, custom_load_function=None):
+    def __init__(self, path_to_trace_file, custom_load_function=None, onlyuse_layers=None):
         """
             path_to_trace_file: The path to the log fiel
             custom_load_function: a function(model, state_dict) that takes a dict and updates a model accordingly
@@ -125,6 +136,7 @@ class CheckpointListTracer(ModelTracingInterface):
         self.res_dict = torch.load(path_to_trace_file)
         self.custom_load_function = custom_load_function
         self.update_cnt = 0
+        self.onlyuse_layers = onlyuse_layers
 
     def update_model_to_next_step(self, model):
         """ Compute the gradients for a batch of input tensors. Usually these are expected
@@ -135,13 +147,17 @@ class CheckpointListTracer(ModelTracingInterface):
 
     def get_gradients_for_step(self):
         """ Get the gradient for a certain step in training. """
-        return torch.cat([t.flatten().cpu() for t in self.res_dict["stepwise_grads"][self.update_cnt-1]])
+        if self.onlyuse_layers is None:
+            return torch.cat([t.flatten().cpu() for t in self.res_dict["stepwise_grads"][self.update_cnt-1]])
+        else:
+            return torch.cat([self.res_dict["stepwise_grads"][self.update_cnt-1][i].flatten().cpu() for i in self.onlyuse_layers])
 
     def get_used_sample_idx(self):
         """ return the index list of the samples used in training from the training dataset. The 
             remaining samples can be used as test points or background data
         """
         return self.res_dict["samples_used"]
+
 
 class SimulatedGradientTracer(ModelTracingInterface):
     """ A simulated multi-variate gaussian distribution of gradients.
@@ -186,10 +202,13 @@ class GLiRAttack():
     """ Run the gradient likelihood ratio attack (GLiR). """
 
     def __init__(self, background_loader: DataLoader, gradient_function: GradientInterface, 
-            model_tracer: ModelTracingInterface, num_params: int, training_batch_size: int, n_background_samples = 10000):
+            model_tracer: ModelTracingInterface, num_params: int, training_batch_size: int, n_background_samples = 10000, small_var_lim=0.0):
         """
             initialize the object.
             background_loader: torch.data_loader for the background dataset (the training data distribution)
+            num_params: The number of parameters of the model to use for the attack. Can be smaller or equal to the number of the parameters of the model.
+                Using the full model size can be intractable for larger models.
+            small_var_lim: Exclude parameters that have a variance smaller than this value for numberical stability (0.0 means including all non-constant params)
         """
         self.background_loader = background_loader
         self.gradient_function = gradient_function
@@ -224,7 +243,7 @@ class GLiRAttack():
         data_loader = DataLoader(mydataset, batch_size=batch_size)
         return self.compute_glir_attack_scores_w_loader(data_loader, n_load, n_steps=n_steps)
 
-    def _compute_cdf_scores(self, k_in, mean_in):
+    def _compute_cdf_scores(self, k_in, mean_in, d_effective):
         """ Compute the p-values under the nullhypotheses: x' is a test point. 
             Return log of p-value.
         """
@@ -232,9 +251,9 @@ class GLiRAttack():
         gamma_2 = self.n*k_in
         qlist = []
         for i in range(len(gamma_2)):
-            q = ncx2.logcdf(mean_in[i], self.d, gamma_2[i])
+            q = ncx2.logcdf(mean_in[i], d_effective, gamma_2[i])
             #print(q)
-            qlist.append(max(q, -200.0))
+            qlist.append(max(q, -250.0))
         score_in = torch.tensor(qlist)
         
         return score_in
@@ -243,10 +262,10 @@ class GLiRAttack():
         n_samples = 0
         loader_iter = iter(data_loader_use)
         grad_list = []
-        while n_samples < n_estimation_samples:
+        for i in tqdm(range(((n_estimation_samples-1)//data_loader_use.batch_size) +1)):
             data = next(loader_iter)
-            grad_list.append(self.gradient_function.compute_gradients(*data))
-            n_samples += len(data[0])
+            grad_list.append(self.gradient_function.compute_gradients(data).detach())
+            n_samples += len(grad_list[-1])
         all_grad = torch.cat(grad_list, axis=0)[:n_estimation_samples]
         return all_grad
 
@@ -261,7 +280,7 @@ class GLiRAttack():
         grads_in = self._estimate_grads(dataloader, n_estimation_samples=n_load) # Obtain gradients of query points
 
         # Computation of K and S (test statistic)
-        if str(type(self.background_loader)) == "<class 'gmip.glir.GaussianDataLoader'>": 
+        if str(type(self.background_loader)) == "<class 'gmip.glir.GaussianDataLoader'>":
             ## Simulated gradients, get true distribution params
             ## Invert using eigenvalues
             grad_means = self.background_loader.mu.reshape(1, -1)
@@ -272,19 +291,35 @@ class GLiRAttack():
             diff = (recorded_step_mean.reshape(-1,1) - grads_in.t())
             diff_trans = math.sqrt(self.n-1)*(sigma_inv_half @ diff)
             mean_in = torch.sum(diff_trans.pow(2), axis=0)
+            d_eff = self.d
         else:
             ## Real gradients, estimate distribution parameters
             grad_estimation = self._estimate_grads(self.background_loader, n_estimation_samples=self.n_background_samples)
+            if grad_estimation.shape[1] > self.d: #Only use d parameters to estimate gradients.
+                sub_idx = torch.arange(self.d)*(grad_estimation.shape[1]//self.d)
+                print("Org len", grad_estimation.shape[1], "using", self.d)
+            else:
+                sub_idx = slice(None, None)
+            grad_estimation = grad_estimation[:, sub_idx]
+            recorded_step_mean = recorded_step_mean[sub_idx]
+            grads_in = grads_in[:, sub_idx]
             grad_means = grad_estimation.mean(axis=0, keepdim=True)
             grad_vars_norm = grad_estimation - grad_means
             sigma_diag = grad_vars_norm.var(axis=0)
+            small_var = sigma_diag < self.small_var_lim
+            print("small_var elements :", torch.sum(small_var))
+            grad_vars_norm = grad_vars_norm[:, ~small_var]
+            grad_means = grad_means[:, ~small_var]
             sigma = (grad_vars_norm.t() @ grad_vars_norm)/len(grad_vars_norm)
             print("Inverting Sigma...")
-            kinv = torch.cholesky_inverse(sigma)
+            kinv = torch.cholesky_inverse(sigma) 
+            #print(kinv.shape)
+            grads_in = grads_in[:, ~small_var]
             # calculate_test_stats
+            recorded_step_mean = recorded_step_mean[~small_var]
             mean_in = (self.n-1)*torch.sum((recorded_step_mean.reshape(1,-1)-grads_in).t() * (kinv @ (recorded_step_mean.reshape(1,-1)-grads_in).t()), axis=0)
             k_in = torch.sum((grads_in - grad_means).t() * (kinv @ (grads_in - grad_means).t()), axis=0)
-       
+            #print(k_in.mean())
+            d_eff = self.d-torch.sum(small_var)
 
-
-        return self._compute_cdf_scores(k_in, mean_in)
+        return self._compute_cdf_scores(k_in, mean_in, d_eff)
