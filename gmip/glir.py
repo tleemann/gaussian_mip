@@ -15,7 +15,8 @@ class GradientInterface(ABC):
     def compute_gradients(self, input_tensors):
         """ Compute the gradients for a batch of input tensors. Usually these tensors are expected
             to have the same length (e.g., input data at index 0, labels as index 1).
-            The function also supports dicts for huggingface models (keys: input_ids, attention_mask, label)
+            The function also supports dicts for huggingface models (keys: input_ids, attention_mask, label).
+            Should return 
         """
         pass
 
@@ -77,7 +78,6 @@ class ClassificationModelGradients(GradientInterface):
         grad_norms = grads.norm(dim=1)
         #print(grad_norms, cutoff)
         grads[grad_norms>self.cutoff] = grads[grad_norms>self.cutoff]/grad_norms[grad_norms>self.cutoff].reshape(-1,1)
-        #print(grads.shape)
         return grads
 
     def __zero_grad(self):
@@ -104,9 +104,9 @@ class ClassificationModelGradients(GradientInterface):
 
 class DirectGradients(GradientInterface):
     """ Implementation of the interface that directly returns tha gradients that were passed.
-        Use in the simulation study.
+        Used in the simulation study.
     """
-    def compute_gradients(self, *input_tensors):
+    def compute_gradients(self, input_tensors):
         """ Compute the gradients for a batch of input tensors. Usually these are expected
             to have the same length (e.g., input data at index 0, labels as index 1).
         """
@@ -156,7 +156,7 @@ class CheckpointListTracer(ModelTracingInterface):
         """ return the index list of the samples used in training from the training dataset. The 
             remaining samples can be used as test points or background data
         """
-        return self.res_dict["samples_used"]
+        return torch.tensor(self.res_dict["samples_used"])
 
 
 class SimulatedGradientTracer(ModelTracingInterface):
@@ -216,6 +216,7 @@ class GLiRAttack():
         self.d = num_params
         self.n = training_batch_size
         self.n_background_samples = n_background_samples
+        self.small_var_lim = small_var_lim
 
     def compute_glir_attack_scores_w_loader(self, dataset_loader: DataLoader, n_load: int, n_steps=1):
         """ 
@@ -225,6 +226,7 @@ class GLiRAttack():
             n_steps: Number of SGD steps to consider for the attack (these will be played back using the model tracer.)
             Return: Summed GLiR scores over the training steps. Shape (n_load).
         """
+        print(n_load)
         tot_scores_mat = []
         for step in range(n_steps):
             self.model_tracer.update_model_to_next_step(self.gradient_function.get_model())
@@ -262,7 +264,7 @@ class GLiRAttack():
         n_samples = 0
         loader_iter = iter(data_loader_use)
         grad_list = []
-        for i in tqdm(range(((n_estimation_samples-1)//data_loader_use.batch_size) +1)):
+        while n_samples < n_estimation_samples:
             data = next(loader_iter)
             grad_list.append(self.gradient_function.compute_gradients(data).detach())
             n_samples += len(grad_list[-1])
@@ -278,7 +280,7 @@ class GLiRAttack():
         #print(str(type(self.background_loader)))
         #print("Computing point grads ...")
         grads_in = self._estimate_grads(dataloader, n_estimation_samples=n_load) # Obtain gradients of query points
-
+        #print("grads_in", grads_in.shape)
         # Computation of K and S (test statistic)
         if str(type(self.background_loader)) == "<class 'gmip.glir.GaussianDataLoader'>":
             ## Simulated gradients, get true distribution params
@@ -301,6 +303,7 @@ class GLiRAttack():
             else:
                 sub_idx = slice(None, None)
             grad_estimation = grad_estimation[:, sub_idx]
+            #print("grad estimation shape:", grad_estimation.shape)
             recorded_step_mean = recorded_step_mean[sub_idx]
             grads_in = grads_in[:, sub_idx]
             grad_means = grad_estimation.mean(axis=0, keepdim=True)
@@ -319,7 +322,7 @@ class GLiRAttack():
             recorded_step_mean = recorded_step_mean[~small_var]
             mean_in = (self.n-1)*torch.sum((recorded_step_mean.reshape(1,-1)-grads_in).t() * (kinv @ (recorded_step_mean.reshape(1,-1)-grads_in).t()), axis=0)
             k_in = torch.sum((grads_in - grad_means).t() * (kinv @ (grads_in - grad_means).t()), axis=0)
-            #print(k_in.mean())
+            #print(k_in.shape)
             d_eff = self.d-torch.sum(small_var)
 
         return self._compute_cdf_scores(k_in, mean_in, d_eff)

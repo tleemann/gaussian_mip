@@ -97,6 +97,7 @@ class ListDataLoader(DataLoader):
                     
     def __init__(self, *dls):
         self.my_dllist = dls
+        self.batch_size = dls[0].batch_size
 
     def __iter__(self):
         return ListDataLoader.ListLoaderIter(self)
