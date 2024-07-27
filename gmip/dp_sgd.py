@@ -4,13 +4,14 @@ from torch.func import grad, grad_and_value, vmap
 from datetime import datetime
 import torch.nn as nn
 import copy
-MAX_PHYSICAL_BATCH = 256 # Maximum batch size on GPU.
-if torch.cuda.is_available() and torch.cuda.device_count() > 0:
-    use_device = torch.device('cuda:0')
-else:
-    use_device = torch.device('cpu')
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+MAX_PHYSICAL_BATCH = 20 # Maximum batch size on GPU.
+
 class RandomSubsetDataset():
     def __init__(self, base_dataset, subsample_ratio: float = 0.5, n_use_total=None):
+        """ Subsample subsample ratio from n_use_total examples of the dataset."""
         self.base_dataset = base_dataset
         if n_use_total == None:
             n_use_total = len(base_dataset)
@@ -22,7 +23,7 @@ class RandomSubsetDataset():
         return self.num_examples_use
 
     def __getitem__(self, idx: int):
-        return self.base_dataset[self.sample_idx[idx]]
+        return self.base_dataset[self.sample_idx[idx].item()]
 
     def get_samples_used(self):
         """ Return the list of samples used for trainin in this datasubset """
@@ -51,8 +52,22 @@ def recursive_fix(module):
         else:
             recursive_fix(sub)
 
+
+def state_dict_to_cpu(sdict, device = "cpu"):
+    for k, v in sdict.items():
+        sdict[k] = sdict[k].to(device)
+    return sdict
+
+
+def list_to_cpu(slist, device = "cpu"):
+    for i in range(len(slist)):
+        slist[i] = slist[i].to(device)
+    return slist
+
+
 def noisy_train(model_priv, trainloader, criterion, optimizer_priv, epoch, start_epoch, 
-                scheduler=None, use_device=use_device, collect_stepwise=False, state_dict_fn=None):
+                scheduler=None, use_device="cuda:0", collect_stepwise=False, state_dict_fn=None, 
+                return_n_last_dims=None, return_grads_every=1):
     """
         Our implementation of the Noisy Private Training (Algorithm 1).
         model: model that should be trained
@@ -65,6 +80,8 @@ def noisy_train(model_priv, trainloader, criterion, optimizer_priv, epoch, start
         tau: noise magnitude
         collect_stepwise: Collect the model parameters and gradients after each training step.
         state_dict_fn: Function that retuns a state dict of trainable parameters for the model
+        return_n_last_grads: return only the last n items of the gradients to save memory.
+        return_grads_every: return not every gradient and parameters but only every couple of steps.
     """
     # eval the model for a specific modified data set
     # Return accuracy and average true class probability.
@@ -80,50 +97,69 @@ def noisy_train(model_priv, trainloader, criterion, optimizer_priv, epoch, start
         model_priv.train()
         print('starting epoch %d'%(epoch+1), datetime.now())
         num_samples = 0
-        for i, data in enumerate(trainloader):
+        for i, data in tqdm(enumerate(trainloader), total=len(trainloader)):
+            batchlen = 0
             # get the inputs; data is a list of [inputs, labels]
-            inputs, labels = data
-            inputs = inputs.to(use_device)
-            labels = labels.to(use_device)
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    if isinstance(v, torch.Tensor):
+                        data[k] = v.to(use_device)
+                        batchlen = len(v)
+                labels = data["label"]
+            else: ## Tuple datasets
+                inputs, labels = data
+                inputs = inputs.to(use_device)
+                labels = labels.to(use_device)
+                batchlen =  len(inputs)
             ## Split the batch in physical batches.
             optimizer_priv.zero_grad()
             outputs_list = []
-            for subbatch_start in range(0, len(inputs), MAX_PHYSICAL_BATCH):
+            for subbatch_start in range(0, batchlen, MAX_PHYSICAL_BATCH):
                 optimizer_priv.zero_subbatch_grad(model_priv)
-                subbatch_end = min(subbatch_start+MAX_PHYSICAL_BATCH, len(inputs))
+                subbatch_end = min(subbatch_start+MAX_PHYSICAL_BATCH, batchlen)
                 #print("Using batch", subbatch_start, subbatch_end)
-                input_batch = inputs[subbatch_start:subbatch_end].clone()
-                labels_batch = labels[subbatch_start:subbatch_end].clone()
-                # forward + backward + optimize
-                outputs_batch = model_priv(input_batch)
-                loss_batch = criterion(outputs_batch, labels_batch) # Note that loss should return one element per batch item.
+                if isinstance(data, dict):
+                    data_batch = {}
+                    for k, v in data.items():
+                        data_batch[k] = v[subbatch_start:subbatch_end]
+                    outputs_batch = model_priv(data_batch["input_ids"], attention_mask=data_batch["attention_mask"], labels=data_batch["label"])["logits"]
+                    #print(outputs_batch, data_batch["label"])
+                    loss_batch = criterion(outputs_batch, data_batch["label"])
+                else: ## Tuple datasets
+                    input_batch = inputs[subbatch_start:subbatch_end].clone()
+                    labels_batch = labels[subbatch_start:subbatch_end].clone()
+                    outputs_batch = model_priv(input_batch)
+                    loss_batch = criterion(outputs_batch, labels_batch) # Note that loss should return one element per batch item.
                 loss_batch.backward()
-                #print(loss.item(), loss2.18item())
+                # forward + backward + optimize
                 optimizer_priv.aggregate_crop_grads(model_priv)
                 running_loss += loss_batch.item()
                 outputs_list.append(outputs_batch.detach())
 
             outputs = torch.cat(outputs_list)
-            if collect_stepwise:
+            if collect_stepwise and (i % return_grads_every == 0):
                 if state_dict_fn == None:
-                    state_dict = model_priv.fc.state_dict()
+                    state_dict = model_priv.state_dict()
                 else:
                     state_dict = state_dict_fn(model_priv)
-                step_param_list.append(copy.deepcopy(state_dict))
+                step_param_list.append(state_dict_to_cpu(copy.deepcopy(state_dict)))
                 # Perform step
                 grad_sum_increment, gradients = optimizer_priv.step(model_priv)
-                step_grad_list.append(gradients)
+                if return_n_last_dims is not None:
+                    step_grad_list.append(list_to_cpu(gradients[-return_n_last_dims:]))
+                else:
+                    step_grad_list.append(list_to_cpu(gradients))
             else:
                 # Perform step
                 grad_sum_increment, _ = optimizer_priv.step(model_priv)
             grad_sum2 += grad_sum_increment
 
-            num_samples += len(inputs)
+            num_samples += batchlen
             # print statistics
             
             
             pred = outputs.max(1, keepdim=True)[1]
-            #print(outputs.shape, pred)
+            #print(pred, model_priv.classifier.weight)
             correct += pred.eq(labels.view_as(pred)).sum().item()
             #if i % 100 == 0:
             #    print(running_loss/num_samples)
@@ -215,7 +251,7 @@ class PrivateOptimizer():
         self.grad_sum = 0.0
 
 
-def eval_model(model, testloader, use_device=use_device):
+def eval_model(model, testloader, use_device="cuda:0"):
     """ Eval accuracy of model. """
     correct = 0
     prob = 0.0
@@ -224,14 +260,24 @@ def eval_model(model, testloader, use_device=use_device):
     with torch.no_grad():
         # for data in tqdm(testloader)
         for i, data in enumerate(testloader):
-            inputs, labels = data
-            inputs = inputs.to(use_device)
-            labels = labels.to(use_device)
-            outputs = model(inputs)
-            _, predicted = torch.max(outputs.data, 1)
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    if isinstance(v, torch.Tensor):
+                        data[k] = v.to(use_device)
+                labels = data["label"]
+                outputs_batch = model(data["input_ids"], attention_mask=data["attention_mask"])["logits"]
+                _, predicted = torch.max(outputs_batch, 1)
+            else:
+                inputs, labels = data
+                inputs = inputs.to(use_device)
+                labels = labels.to(use_device)
+                outputs = model(inputs)
+                _, predicted = torch.max(outputs.data, 1)
             correct += (predicted == labels).sum().item()
             #break
-    print('Accuracy of the network on test images: %.4f %%, average probability:  %.4f' % (
+    print('Accuracy of the network on test samples: %.4f %%, average probability:  %.4f' % (
                     100 * correct / len(testloader.dataset), prob / len(testloader.dataset)))
     acc_avg = correct / len(testloader.dataset)
     return acc_avg
+
+

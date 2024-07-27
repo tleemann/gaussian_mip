@@ -4,6 +4,12 @@ from scipy.stats import norm
 from torch.utils.data import DataLoader
 import numpy as np
 import math
+from typing import Union
+from transformers import AutoTokenizer
+from transformers.tokenization_utils_base import BatchEncoding
+import torch
+from shap import KernelExplainer
+
 
 def fn_dong(mus):
     return math.sqrt(2)*math.sqrt(math.exp(mus*mus)*norm.cdf(1.5*mus)+3*norm.cdf(-0.5*mus)-2)
@@ -91,9 +97,56 @@ class ListDataLoader(DataLoader):
                     
     def __init__(self, *dls):
         self.my_dllist = dls
+        self.batch_size = dls[0].batch_size
 
     def __iter__(self):
         return ListDataLoader.ListLoaderIter(self)
 
     def __len__(self):
         return sum([len(myload) for myload in self.my_dllist])
+
+def language_kernel_shap(model, 
+                         data: dict,
+                         pretrained_model: str = 'distilbert-base-uncased',
+                         maxlen: int = 510,
+                         use_device: str = 'cuda:3'):
+    
+    tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
+    impute_token = "[UNK]"
+    num_samples = "auto"
+    filler = tokenizer.convert_tokens_to_ids([impute_token])
+    bg = np.array([filler * min(tokenizer.model_max_length, 1024)])
+    
+    for k, v in data.items():
+        if isinstance(v, torch.Tensor):
+            data[k] = v.to(use_device)
+                
+    def kernel_shap(input_tokens: BatchEncoding):
+        
+        def __kernel_shap(input_tokens):
+            input_tokens = input_tokens[:maxlen]
+            
+            input_tokens = torch.from_numpy(input_tokens).long()
+            
+            outputs = model(input_tokens.to(use_device))['logits']
+            probs = outputs.detach().cpu().numpy()
+            val = probs[:, 1] - probs[:, 0]
+            return val
+        
+        shap_explainer = KernelExplainer(__kernel_shap, data=bg[:,:len(input_tokens)], algorithm="kernel")
+        shap_values = shap_explainer.shap_values(
+            np.array(input_tokens.__getattr__('input_ids')).reshape(1,-1), 
+            nsamples=num_samples)
+            
+        if len(shap_values.shape) == 1:
+            shap_values = shap_values.reshape(1, -1)
+        return shap_values
+    
+    shap_values = []
+    for text in data['text']:
+        input_tokens = tokenizer(text, truncation=True, padding=True)
+        shap = kernel_shap(input_tokens)
+        shap_values.append(shap)
+        
+    return np.array(shap_values).squeeze(1)  
+    

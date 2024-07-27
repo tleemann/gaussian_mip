@@ -1,6 +1,8 @@
 # Gaussian Membership Inference Privacy
 
-This repository contains accompanying code for the paper [Gaussian Membership Inference Privacy](https://arxiv.org/abs/2306.07273) by Tobias Leemann*, Martin Pawelczyk*, and Gjergji Kasneci (appeared at NeurIPS 2023).
+This repository contains accompanying code for the paper [Gaussian Membership Inference Privacy](https://arxiv.org/abs/2306.07273) by Tobias Leemann*, Martin Pawelczyk*, and Gjergji Kasneci (appeared at NeurIPS 2023). 
+
+The codebase was extended with to make the attack applicable to real-world models in the workshop paper [Is My Data Safe? Predicting Instance-Level Membership Inference Success for White-box and Black-box Attacks](https://openreview.net/forum?id=YfzvhsKymO) (ICML 2024 NextGenAISafety Workshop). Details can be found at the end of this document.
 
 ## Membership Inference Privacy Calculator: How Private is Your Model? 
 
@@ -47,7 +49,7 @@ To reproduce our experiment on the utility of Membership Inference Private model
 
 
 ## Reference
-If you find our work or the ressources provided here useful, please consider citing our work, for instance using the following BibTex entry:
+If you find our work or the ressources provided here useful, please consider citing our work, for instance using the following BibTeX entry:
 
 ```
 @InProceedings{leemann2023gaussian,
@@ -57,3 +59,44 @@ If you find our work or the ressources provided here useful, please consider cit
   year      = {2023}
 }
 ```
+
+# Is My Data Safe? Predicting Instance-Level Membership Inference Success for White-box and Black-box Attacks
+The repository additionally contains code for extending the attack to more realistic datasets and models such as BERT and a skin cancer prediction dataset as presented in the [ICML workshop paper.](https://openreview.net/forum?id=YfzvhsKymO).
+
+To reproduce the results in this work, the following steps are required:
+
+## Training models
+The ML models used in our work can be trained by running the script
+```
+./train_scripts/train_risk_pred.sh <dataset>
+```
+where ```dataset``` can be either ```cancer```, ```imdb```, or ```cifar10```.
+
+## Running attacks
+To attack the trained models, we provide scripts in the folder ```.\attacks```. 
+See the scripts for details on the arguments that they expect (usually the dataset and the number of models to run the attack on).
+The scripts will save the resulting attack scores in files
+```results/mi_scores_<attack>_<dataset>.pt```
+We provide these files in the repository.
+
+## Computing risk predictors
+
+See script ```eval_predictions.py```.
+
+## Analyzing risk predictors
+The plots and tables from the workshop paper are produced using the notebook ```notebooks\StudyRiskPredictors.ipynb```.
+Please refer to the workshop paper for more details on the predictors.
+
+
+## Citation
+Use the following citation if you find this project insightful:
+```
+@InProceedings{leemann2024data,
+  title     = {Is My Data Safe? Predicting Instance-Level Membership Inference Success for White-box and Black-box Attacks},
+  author    = {Leemann, Tobias and Prenkaj, Bardh and Kasneci, Gjergji},
+  booktitle = {ICML 2024 Workshop on the Next Generation of AI Safety},
+  year      = {2024}
+}
+```
+
+

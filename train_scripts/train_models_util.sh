@@ -14,8 +14,8 @@ if [ $1 == "cifar10" ]
 then
 cutoff=500
 batchsize=400
-export PYTHONPATH="."; python3 gmip/train_cifar.py --num_train 48000 $cutoff DP$prlvl $runid $SAVEPATH $batchsize 10 resnet56
-export PYTHONPATH="."; python3 gmip/train_cifar.py --num_train 48000 $cutoff MIP$prlvl $runid $SAVEPATH $batchsize 10 resnet56
+export PYTHONPATH="."; python3 train_scripts/train_cifar.py --num_train 48000 $cutoff DP$prlvl $runid $SAVEPATH $batchsize 10 resnet56
+export PYTHONPATH="."; python3 train_scripts/train_cifar.py --num_train 48000 $cutoff MIP$prlvl $runid $SAVEPATH $batchsize 10 resnet56
 fi
 
 if [ $1 == "purchase" ]
@@ -25,8 +25,8 @@ batchsize=795
 kd_val=2580
 numtrain=54855
 epochs=3
-export PYTHONPATH="."; python3 gmip/train_tabular.py purchase $cutoff DP$prlvl $runid $SAVEPATH $batchsize $epochs --kval $kd_val --model_dims $kd_val --num_train $numtrain
-export PYTHONPATH="."; python3 gmip/train_tabular.py purchase $cutoff MIP$prlvl $runid $SAVEPATH $batchsize $epochs --kval $kd_val --model_dims $kd_val --num_train $numtrain
+export PYTHONPATH="."; python3 train_scripts/train_tabular.py purchase $cutoff DP$prlvl $runid $SAVEPATH $batchsize $epochs --kval $kd_val --model_dims $kd_val --num_train $numtrain
+export PYTHONPATH="."; python3 train_scripts/train_tabular.py purchase $cutoff MIP$prlvl $runid $SAVEPATH $batchsize $epochs --kval $kd_val --model_dims $kd_val --num_train $numtrain
 fi
 
 if [ $1 == "adult" ]
@@ -36,8 +36,8 @@ batchsize=1000
 kd_val=1026
 numtrain=43000
 epochs=20
-export PYTHONPATH="."; python3 gmip/train_tabular.py adult $cutoff DP$prlvl $runid $SAVEPATH $batchsize $epochs --kval $kd_val --model_dims $kd_val --num_train $numtrain
-export PYTHONPATH="."; python3 gmip/train_tabular.py adult $cutoff MIP$prlvl $runid $SAVEPATH $batchsize $epochs --kval $kd_val --model_dims $kd_val --num_train $numtrain
+export PYTHONPATH="."; python3 train_scripts/train_tabular.py adult $cutoff DP$prlvl $runid $SAVEPATH $batchsize $epochs --kval $kd_val --model_dims $kd_val --num_train $numtrain
+export PYTHONPATH="."; python3 train_scripts/train_tabular.py adult $cutoff MIP$prlvl $runid $SAVEPATH $batchsize $epochs --kval $kd_val --model_dims $kd_val --num_train $numtrain
 fi
 
 done
